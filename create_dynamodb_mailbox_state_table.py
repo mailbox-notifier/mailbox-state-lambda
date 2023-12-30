@@ -94,8 +94,13 @@ def main():
     key_name = 'open'
     initial_value = 0
 
+    print("Creating DynamoDB table")
+
     create_dynamodb_table(table_name)
+    print("Creating initial key/value")
+
     create_initial_key_value(table_name, key_name, initial_value)
+    print("Done")
 
 
 if __name__ == '__main__':
