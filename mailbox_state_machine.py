@@ -97,20 +97,19 @@ class MailboxStateMachine:
         except ClientError as e:
             print(f"Error resetting DynamoDB: {e}")
 
-
     def transition_to_open(self):
         """
         Transitions the state machine to the OPEN state and sends an SNS notification.
         """
         self.state = "OPEN"
-        self.send_sns_message("Mailbox is now OPEN")
+        self.send_sns_message("Mailbox OPEN")
 
     def transition_to_ajar(self):
         """
         Transitions the state machine to the AJAR state and sends an SNS notification.
         """
         self.state = "AJAR"
-        self.send_sns_message("Mailbox is AJAR")
+        self.send_sns_message("Mailbox AJAR")
 
     def transition_to_closed(self):
         """
@@ -118,8 +117,8 @@ class MailboxStateMachine:
         Sends an SNS notification if the 'open' counter is greater than 0.
         """
         self.state = "CLOSED"
-        if self.get_db_value() > 0:
-            self.send_sns_message("Mailbox is now CLOSED")
+        if self.get_db_value() > 1:
+            self.send_sns_message("Mailbox CLOSED")
 
     def get_db_value(self):
         """
@@ -181,14 +180,17 @@ def main():
 
     # Example test events
     test_events = [
+        "open", "closed",
         "open", "open", "closed",
         "open", "open", "open", "closed",
-        "open", "open", "open", "open", "open", "open", "open", "open", "open", "closed"
     ]
+
     for event in test_events:
         mailbox.handle_event(event)
         print(f"Handled event '{event}', current state: {mailbox.state}")
         time.sleep(30)  # Add a 30-second delay between events
+
+    mailbox.reset_db_value()
 
 
 if __name__ == "__main__":
