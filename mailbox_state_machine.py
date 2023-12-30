@@ -1,3 +1,13 @@
+"""
+This module defines the MailboxStateMachine class to manage the state of a physical mailbox. It
+interacts with AWS services, specifically DynamoDB for maintaining a counter of mailbox
+open/close events and SNS for sending notifications based on the mailbox's state. The mailbox
+can be in one of three states: OPEN, CLOSED, or AJAR, transitioning between these states based
+on the received events.
+
+The main function at the bottom of the module facilitates testing the MailboxStateMachine with a
+series of predefined events and simulates a time delay between them.
+"""
 import os
 import time
 
@@ -6,6 +16,30 @@ from botocore.exceptions import ClientError
 
 
 class MailboxStateMachine:
+    """
+     A state machine for managing the state of a mailbox.
+
+     Attributes:
+         state (str): The current state of the mailbox ('OPEN', 'CLOSED', 'AJAR').
+         sns_client: The Boto3 SNS client for sending notifications.
+         dynamodb: The Boto3 DynamoDB resource.
+         table: The DynamoDB table for storing the event count.
+         sns_arn (str): The ARN of the SNS topic for sending notifications.
+         ajar_message_count (int): Counter for the number of messages sent in the AJAR state.
+
+     Methods:
+         handle_event: Process an incoming mailbox event ('open' or 'closed').
+         increment_counter: Increments the counter in DynamoDB for 'open' events.
+         reset_counter: Resets the counter in DynamoDB for 'closed' events.
+         transition_to_open: Handles the transition to the OPEN state.
+         transition_to_ajar: Handles the transition to the AJAR state.
+         transition_to_closed: Handles the transition to the CLOSED state.
+         get_counter: Retrieves the current counter value from DynamoDB.
+         send_sns_message: Sends a message to the configured SNS topic.
+         handle_ajar_state: Manages the AJAR state, including sending messages based on
+           an exponential backoff strategy.
+     """
+
     def __init__(self, sns_arn, dynamodb_name):
         self.state = "CLOSED"
         self.sns_client = boto3.client('sns')
@@ -15,6 +49,12 @@ class MailboxStateMachine:
         self.ajar_message_count = 0
 
     def handle_event(self, event):
+        """
+        Processes an incoming event and updates the mailbox state accordingly.
+
+        Args:
+            event (str): The event type, either 'open' or 'closed'.
+        """
         if event == "open":
             self.increment_counter()
             if self.state == "CLOSED":
@@ -28,6 +68,10 @@ class MailboxStateMachine:
             self.transition_to_closed()
 
     def increment_counter(self):
+        """
+        Increments the 'open' event counter in the DynamoDB table.
+        Handles and logs any potential errors in the update process.
+        """
         try:
             self.table.update_item(
                 Key={'id': 'open'},
@@ -39,6 +83,10 @@ class MailboxStateMachine:
             print(f"Error updating DynamoDB: {e}")
 
     def reset_counter(self):
+        """
+        Resets the 'open' event counter in the DynamoDB table to 0.
+        Handles and logs any potential errors in the reset process.
+        """
         try:
             self.table.put_item(
                 Item={'id': 'open', 'counter': 0}
@@ -47,19 +95,35 @@ class MailboxStateMachine:
             print(f"Error resetting DynamoDB: {e}")
 
     def transition_to_open(self):
+        """
+        Transitions the state machine to the OPEN state and sends an SNS notification.
+        """
         self.state = "OPEN"
         self.send_sns_message("Mailbox is now OPEN")
 
     def transition_to_ajar(self):
+        """
+        Transitions the state machine to the AJAR state and sends an SNS notification.
+        """
         self.state = "AJAR"
         self.send_sns_message("Mailbox is AJAR")
 
     def transition_to_closed(self):
+        """
+        Transitions the state machine to the CLOSED state.
+        Sends an SNS notification if the 'open' counter is greater than 0.
+        """
         self.state = "CLOSED"
         if self.get_counter() > 0:
             self.send_sns_message("Mailbox is now CLOSED")
 
     def get_counter(self):
+        """
+        Retrieves the current value of the 'open' event counter from DynamoDB.
+
+        Returns:
+            int: The current count of 'open' events.
+        """
         try:
             response = self.table.get_item(Key={'id': 'open'})
             return response['Item'].get('counter', 0)
@@ -68,6 +132,12 @@ class MailboxStateMachine:
             return 0
 
     def send_sns_message(self, message):
+        """
+        Sends a notification message to the configured SNS topic.
+
+        Args:
+            message (str): The message to be sent.
+        """
         try:
             self.sns_client.publish(
                 TopicArn=self.sns_arn,
@@ -78,6 +148,10 @@ class MailboxStateMachine:
 
     # Implement exponential backoff logic for AJAR state
     def handle_ajar_state(self):
+        """
+        Manages the AJAR state by sending SNS messages based on an exponential backoff strategy.
+        Determines if a message should be sent based on the current count of 'open' events.
+        """
         counter = self.get_counter()
         # Assuming an exponential backoff strategy with a base of 2
         if counter >= 2 ** (self.ajar_message_count + 1):
@@ -86,6 +160,12 @@ class MailboxStateMachine:
 
 
 def main():
+    """
+    Main function for testing the MailboxStateMachine.
+
+    Reads AWS configuration from environment variables, creates an instance of MailboxStateMachine,
+    and processes a series of test events.
+    """
     sns_arn = os.getenv('SNS_ARN')
     dynamodb_name = os.getenv('DYNAMODB_TABLE')
 
