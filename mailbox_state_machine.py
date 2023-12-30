@@ -166,8 +166,8 @@ def main():
     Reads AWS configuration from environment variables, creates an instance of MailboxStateMachine,
     and processes a series of test events.
     """
-    sns_arn = os.getenv('SNS_ARN')
-    dynamodb_name = os.getenv('DYNAMODB_TABLE')
+    sns_arn = os.getenv('MAILBOX_SNS_ARN')
+    dynamodb_name = os.getenv('MAILBOX_DYNAMODB_TABLE')
 
     if not sns_arn or not dynamodb_name:
         print("Error: SNS_ARN and DYNAMODB_TABLE environment variables are required.")
