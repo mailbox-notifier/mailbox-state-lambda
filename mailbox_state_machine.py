@@ -46,7 +46,7 @@ class MailboxStateMachine:
         self.dynamodb = boto3.resource('dynamodb')
         self.table = self.dynamodb.Table(dynamodb_name)
         self.sns_arn = sns_arn
-        self.ajar_message_count = 0
+        self.ajar_message_count = 1
 
     def handle_event(self, event):
         """
@@ -186,6 +186,8 @@ def main():
         "open", "open", "closed",
         # OPEN, 1 AJAR, and CLOSED messages should be received
         "open", "open", "open", "closed",
+        # OPEN, 2 AJAR, and CLOSED messages should be received
+        "open", "open", "open", "open", "closed",
     ]
 
     for event in test_events:
