@@ -64,8 +64,8 @@ class MailboxStateMachine:
             elif self.state == "AJAR":
                 self.handle_ajar_state()  # Handle AJAR state logic
         elif event == "closed":
-            self.reset_db_value()
             self.transition_to_closed()
+            self.reset_db_value()
 
     def increment_db_value(self):
         """
@@ -180,14 +180,17 @@ def main():
 
     # Example test events
     test_events = [
+        # OPEN, but no CLOSED message should be received
         "open", "closed",
+        # OPEN, AJAR and CLOSED messages should be received
         "open", "open", "closed",
+        # OPEN, 1 AJAR, and CLOSED messages should be received
         "open", "open", "open", "closed",
     ]
 
     for event in test_events:
         mailbox.handle_event(event)
-        print(f"Handled event '{event}', current state: {mailbox.state}")
+        print(f"Event:'{event}', State: {mailbox.state}, DB: {mailbox.get_db_value()}")
         time.sleep(30)  # Add a 30-second delay between events
 
     mailbox.reset_db_value()
