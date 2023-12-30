@@ -1,3 +1,6 @@
+import os
+import time
+
 import boto3
 from botocore.exceptions import ClientError
 
@@ -9,6 +12,7 @@ class MailboxStateMachine:
         self.dynamodb = boto3.resource('dynamodb')
         self.table = self.dynamodb.Table(dynamodb_name)
         self.sns_arn = sns_arn
+        self.ajar_message_count = 0
 
     def handle_event(self, event):
         if event == "open":
@@ -17,7 +21,8 @@ class MailboxStateMachine:
                 self.transition_to_open()
             elif self.state == "OPEN":
                 self.transition_to_ajar()
-            # AJAR state does not transition on "open"
+            elif self.state == "AJAR":
+                self.handle_ajar_state()  # Handle AJAR state logic
         elif event == "closed":
             self.reset_counter()
             self.transition_to_closed()
@@ -73,9 +78,6 @@ class MailboxStateMachine:
 
     # Implement exponential backoff logic for AJAR state
     def handle_ajar_state(self):
-        if self.state != "AJAR":
-            return
-
         counter = self.get_counter()
         # Assuming an exponential backoff strategy with a base of 2
         if counter >= 2 ** (self.ajar_message_count + 1):
@@ -83,8 +85,27 @@ class MailboxStateMachine:
             self.send_sns_message(f"Mailbox still AJAR, message count: {self.ajar_message_count}")
 
 
-# Example Usage
-mailbox = MailboxStateMachine("sns_arn_here", "dynamodb_name_here")
-mailbox.handle_event("open")
-mailbox.handle_event("open")
-mailbox.handle_event("closed")
+def main():
+    sns_arn = os.getenv('SNS_ARN')
+    dynamodb_name = os.getenv('DYNAMODB_TABLE')
+
+    if not sns_arn or not dynamodb_name:
+        print("Error: SNS_ARN and DYNAMODB_TABLE environment variables are required.")
+        return
+
+    mailbox = MailboxStateMachine(sns_arn, dynamodb_name)
+
+    # Example test events
+    test_events = [
+        "open", "open", "closed",
+        "open", "open", "open", "closed",
+        "open", "open", "open", "open", "open", "open", "open", "open", "open", "closed"
+    ]
+    for event in test_events:
+        mailbox.handle_event(event)
+        print(f"Handled event '{event}', current state: {mailbox.state}")
+        time.sleep(30)  # Add a 30-second delay between events
+
+
+if __name__ == "__main__":
+    main()
