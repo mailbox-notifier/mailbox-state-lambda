@@ -191,7 +191,7 @@ def main():
     for event in test_events:
         mailbox.handle_event(event)
         print(f"Event:'{event}', State: {mailbox.state}, DB: {mailbox.get_db_value()}")
-        time.sleep(30)  # Add a 30-second delay between events
+        time.sleep(10)  # Add a 10-second delay between events
 
     mailbox.reset_db_value()
 
