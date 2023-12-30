@@ -29,12 +29,12 @@ class MailboxStateMachine:
 
      Methods:
          handle_event: Process an incoming mailbox event ('open' or 'closed').
-         increment_counter: Increments the counter in DynamoDB for 'open' events.
-         reset_counter: Resets the counter in DynamoDB for 'closed' events.
+         increment_db_value: Increments the counter in DynamoDB for 'open' events.
+         reset_db_value: Resets the counter in DynamoDB for 'closed' events.
          transition_to_open: Handles the transition to the OPEN state.
          transition_to_ajar: Handles the transition to the AJAR state.
          transition_to_closed: Handles the transition to the CLOSED state.
-         get_counter: Retrieves the current counter value from DynamoDB.
+         get_db_value: Retrieves the current counter value from DynamoDB.
          send_sns_message: Sends a message to the configured SNS topic.
          handle_ajar_state: Manages the AJAR state, including sending messages based on
            an exponential backoff strategy.
@@ -56,7 +56,7 @@ class MailboxStateMachine:
             event (str): The event type, either 'open' or 'closed'.
         """
         if event == "open":
-            self.increment_counter()
+            self.increment_db_value()
             if self.state == "CLOSED":
                 self.transition_to_open()
             elif self.state == "OPEN":
@@ -64,35 +64,39 @@ class MailboxStateMachine:
             elif self.state == "AJAR":
                 self.handle_ajar_state()  # Handle AJAR state logic
         elif event == "closed":
-            self.reset_counter()
+            self.reset_db_value()
             self.transition_to_closed()
 
-    def increment_counter(self):
+    def increment_db_value(self):
         """
-        Increments the 'open' event counter in the DynamoDB table.
+        Increments the value associated with the 'open' key in the DynamoDB table.
         Handles and logs any potential errors in the update process.
         """
         try:
             self.table.update_item(
                 Key={'id': 'open'},
-                UpdateExpression='ADD counter :inc',
-                ExpressionAttributeValues={':inc': 1},
-                ReturnValues="UPDATED_NEW"
+                UpdateExpression='SET #val = if_not_exists(#val, :zero) + :inc',
+                ExpressionAttributeNames={'#val': 'value'},
+                ExpressionAttributeValues={':inc': 1, ':zero': 0}
             )
         except ClientError as e:
             print(f"Error updating DynamoDB: {e}")
 
-    def reset_counter(self):
+    def reset_db_value(self):
         """
-        Resets the 'open' event counter in the DynamoDB table to 0.
+        Resets the value associated with the 'open' key in the DynamoDB table to 0.
         Handles and logs any potential errors in the reset process.
         """
         try:
-            self.table.put_item(
-                Item={'id': 'open', 'counter': 0}
+            self.table.update_item(
+                Key={'id': 'open'},
+                UpdateExpression='SET #val = :zero',
+                ExpressionAttributeNames={'#val': 'value'},
+                ExpressionAttributeValues={':zero': 0}
             )
         except ClientError as e:
             print(f"Error resetting DynamoDB: {e}")
+
 
     def transition_to_open(self):
         """
@@ -114,21 +118,21 @@ class MailboxStateMachine:
         Sends an SNS notification if the 'open' counter is greater than 0.
         """
         self.state = "CLOSED"
-        if self.get_counter() > 0:
+        if self.get_db_value() > 0:
             self.send_sns_message("Mailbox is now CLOSED")
 
-    def get_counter(self):
+    def get_db_value(self):
         """
-        Retrieves the current value of the 'open' event counter from DynamoDB.
+        Retrieves the current value of the 'open' key from DynamoDB.
 
         Returns:
-            int: The current count of 'open' events.
+            int: The current value associated with the 'open' key.
         """
         try:
             response = self.table.get_item(Key={'id': 'open'})
-            return response['Item'].get('counter', 0)
+            return int(response['Item'].get('value', 0))
         except ClientError as e:
-            print(f"Error getting counter from DynamoDB: {e}")
+            print(f"Error getting 'open' value from DynamoDB: {e}")
             return 0
 
     def send_sns_message(self, message):
@@ -152,7 +156,7 @@ class MailboxStateMachine:
         Manages the AJAR state by sending SNS messages based on an exponential backoff strategy.
         Determines if a message should be sent based on the current count of 'open' events.
         """
-        counter = self.get_counter()
+        counter = self.get_db_value()
         # Assuming an exponential backoff strategy with a base of 2
         if counter >= 2 ** (self.ajar_message_count + 1):
             self.ajar_message_count += 1
