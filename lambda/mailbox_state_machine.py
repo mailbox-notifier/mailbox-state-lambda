@@ -167,17 +167,35 @@ class MailboxStateMachine:
         except ClientError as e:
             print(f"Error sending SNS message: {e}")
 
-    # Implement exponential backoff logic for AJAR state
     def handle_ajar_state(self):
         """
         Manages the AJAR state by sending SNS messages based on an exponential backoff strategy.
         Determines if a message should be sent based on the current count of 'open' events.
+        The message is sent when the counter is a power of 2.
+
+        Explanation:
+         - The condition counter & (counter - 1) checks if counter is a power of 2. This works
+           because powers of 2 in binary form have a single '1' followed by '0's, and
+           subtracting 1 from such a number results in a binary number with '1's in all the
+           places where the original number had '0's. The bitwise AND of such numbers is 0.
+         - The check counter > 0 ensures that the condition does not send a message when
+           the counter is 0.
+         - This logic will trigger a message when the counter reaches 1, 2, 4, 8, 16, and so on.
+
+        Progression Summary:
+         - At 20 minutes, the counter reaches 2, and a message is sent.
+         - At 40 minutes, the counter reaches 4, and another message is sent.
+         - At 80 minutes, the counter reaches 8, and another message is sent.
+         - At 160 minutes, the counter reaches 16, and another message is sent.
+         - At 320 minutes, the counter reaches 32, and another message is sent.
+         - At 640 minutes, the counter reaches 64, and another message is sent.
+         - At 1280 minutes, the counter reaches 128, and another message is sent.
         """
         counter = self.get_db_value()
-        # Assuming an exponential backoff strategy with a base of 2
-        if counter >= 2 ** (self.ajar_message_count + 1):
-            self.ajar_message_count += 1
-            self.send_sns_message(f"Mailbox still AJAR, message count: {self.ajar_message_count}")
+
+        # Check if the counter is a power of 2
+        if counter & (counter - 1) == 0 and counter > 0:
+            self.send_sns_message(f"Mailbox still AJAR, event count: {counter}")
 
 
 def main():
