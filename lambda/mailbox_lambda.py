@@ -54,9 +54,9 @@ def handler(event, context):
     print(f"event:\n{event}")
     print(f"context:\n{context}")
 
-    if 'open' in event['path']:
+    if 'open' in event['rawPath']:
         mailbox_status = 'open'
-    elif 'closed' in event['path']:
+    elif 'closed' in event['rawPath']:
         mailbox_status = 'closed'
     else:
         print("Error: Invalid mailbox status.")
