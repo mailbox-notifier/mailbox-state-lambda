@@ -45,6 +45,7 @@ class MailboxStateMachine:
         self.sns_client = boto3.client('sns')
         self.dynamodb = boto3.resource('dynamodb')
         self.table = self.dynamodb.Table(dynamodb_name)
+        self.state = self.get_current_state()
         self.sns_arn = sns_arn
         self.ajar_message_count = 1
 
