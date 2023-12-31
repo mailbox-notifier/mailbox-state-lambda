@@ -72,5 +72,6 @@ def handler(event, context):
     mailbox = MailboxStateMachine(sns_arn, dynamodb_name)
 
     mailbox.handle_event(mailbox_status)
+    print(f"Event:'{mailbox_status}', State: {mailbox.state}, DB: {mailbox.get_db_value()}")
 
     return http_message(200, 'Success')
