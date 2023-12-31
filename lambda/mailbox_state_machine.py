@@ -41,12 +41,30 @@ class MailboxStateMachine:
      """
 
     def __init__(self, sns_arn, dynamodb_name):
-        self.state = "CLOSED"
+        self.state = self.get_current_state()
         self.sns_client = boto3.client('sns')
         self.dynamodb = boto3.resource('dynamodb')
         self.table = self.dynamodb.Table(dynamodb_name)
         self.sns_arn = sns_arn
         self.ajar_message_count = 1
+
+    def get_current_state(self):
+        """
+        Retrieves the current state of the mailbox from DynamoDB.
+
+        Returns:
+            str: The current state of the mailbox ('OPEN', 'CLOSED', 'AJAR').
+        """
+        db_value = self.get_db_value()
+
+        if db_value == 0:
+            state_value = "CLOSED"
+        elif db_value == 1:
+            state_value = "OPEN"
+        else:
+            state_value = "AJAR"
+
+        return state_value
 
     def handle_event(self, event):
         """
