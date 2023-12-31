@@ -41,7 +41,6 @@ class MailboxStateMachine:
      """
 
     def __init__(self, sns_arn, dynamodb_name):
-        self.state = self.get_current_state()
         self.sns_client = boto3.client('sns')
         self.dynamodb = boto3.resource('dynamodb')
         self.table = self.dynamodb.Table(dynamodb_name)
