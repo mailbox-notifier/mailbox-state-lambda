@@ -9,7 +9,10 @@ Requirements:
 - Properly configured AWS credentials
 """
 
+import datetime
+
 import boto3
+import pytz  # For handling timezone
 from botocore.exceptions import ClientError
 
 
@@ -71,16 +74,36 @@ def create_initial_key_value(table_name, key_name, initial_value):
     dynamodb = boto3.resource('dynamodb')
     table = dynamodb.Table(table_name)
 
+    # Get current time in UTC and convert it to US Central Time (UTC-6)
+    utc_now = datetime.datetime.now(pytz.utc)
+    central_time = utc_now.astimezone(pytz.timezone('US/Central'))
+
     try:
         response = table.put_item(
             Item={
                 'id': key_name,
-                'value': initial_value
+                'value': initial_value,
+                'timestamp': central_time.strftime('%Y%m%d%H%M%S')  # Formatting the timestamp
             }
         )
-        print(f"Key '{key_name}' created with initial value {initial_value}")
+        print(f"Key '{key_name}' created with initial value {initial_value} and timestamp {central_time}")
     except ClientError as e:
         print(f"Error putting item: {e}")
+
+
+def wait_for_table_creation(table_name):
+    """
+    Waits for the specified DynamoDB table to become active.
+
+    Args:
+        table_name (str): The name of the DynamoDB table to check.
+    """
+    dynamodb = boto3.client('dynamodb')
+    waiter = dynamodb.get_waiter('table_exists')
+    try:
+        waiter.wait(TableName=table_name)
+    except ClientError as e:
+        print(f"Error waiting for table creation: {e}")
 
 
 def main():
@@ -90,15 +113,18 @@ def main():
     It defines the table name and key/value pair details, then calls functions
     to create the DynamoDB table and insert the initial key/value pair.
     """
-    table_name = 'mailbox-state-key'
+    table_name = 'mailbox-state'
     key_name = 'open'
     initial_value = 0
 
     print("Creating DynamoDB table")
-
     create_dynamodb_table(table_name)
-    print("Creating initial key/value")
 
+    # Wait for the table to become active
+    print("Waiting for table to become active...")
+    wait_for_table_creation(table_name)
+
+    print("Creating initial key/value")
     create_initial_key_value(table_name, key_name, initial_value)
     print("Done")
 
