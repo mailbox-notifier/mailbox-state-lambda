@@ -8,10 +8,12 @@ on the received events.
 The main function at the bottom of the module facilitates testing the MailboxStateMachine with a
 series of predefined events and simulates a time delay between them.
 """
+import datetime
 import os
 import time
 
 import boto3
+import pytz  # For handling timezone
 from botocore.exceptions import ClientError
 
 
@@ -83,37 +85,46 @@ class MailboxStateMachine:
                 self.handle_ajar_state()  # Handle AJAR state logic
         elif event == "closed":
             self.transition_to_closed()
-            self.reset_db_value()
+            self.reset_db_value()  # Reset the counter in DynamoDB for closed events
 
     def increment_db_value(self):
         """
-        Increments the value associated with the 'open' key in the DynamoDB table.
-        Handles and logs any potential errors in the update process.
+        Increments the value associated with the 'open' key in the DynamoDB table and adds a timestamp.
         """
+        current_time = self.get_current_timestamp()
         try:
             self.table.update_item(
                 Key={'id': 'open'},
-                UpdateExpression='SET #val = if_not_exists(#val, :zero) + :inc',
-                ExpressionAttributeNames={'#val': 'value'},
-                ExpressionAttributeValues={':inc': 1, ':zero': 0}
+                UpdateExpression='SET #val = if_not_exists(#val, :zero) + :inc, #ts = :time',
+                ExpressionAttributeNames={'#val': 'value', '#ts': 'timestamp'},
+                ExpressionAttributeValues={':inc': 1, ':zero': 0, ':time': current_time}
             )
         except ClientError as e:
             print(f"Error updating DynamoDB: {e}")
 
     def reset_db_value(self):
         """
-        Resets the value associated with the 'open' key in the DynamoDB table to 0.
-        Handles and logs any potential errors in the reset process.
+        Resets the value associated with the 'open' key in the DynamoDB table to 0 and adds a timestamp.
         """
+        current_time = self.get_current_timestamp()
         try:
             self.table.update_item(
                 Key={'id': 'open'},
-                UpdateExpression='SET #val = :zero',
-                ExpressionAttributeNames={'#val': 'value'},
-                ExpressionAttributeValues={':zero': 0}
+                UpdateExpression='SET #val = :zero, #ts = :time',
+                ExpressionAttributeNames={'#val': 'value', '#ts': 'timestamp'},
+                ExpressionAttributeValues={':zero': 0, ':time': current_time}
             )
         except ClientError as e:
             print(f"Error resetting DynamoDB: {e}")
+
+    @staticmethod
+    def get_current_timestamp():
+        """
+        Returns the current timestamp in a formatted string.
+        """
+        utc_now = datetime.datetime.now(pytz.utc)
+        central_time = utc_now.astimezone(pytz.timezone('US/Central'))
+        return central_time.strftime('%Y%m%d%H%M%S')
 
     def transition_to_open(self):
         """
