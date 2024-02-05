@@ -1,4 +1,4 @@
-The Lambda function, named `mailbox-door-state-notification-lambda`, is an integral part of a smart mailbox system
+The Lambda function, named `mailbox-state-lambda`, is an integral part of a smart mailbox system
 designed to monitor and respond to the state changes of a physical mailbox. It is deployed within the AWS ecosystem,
 leveraging various AWS services for efficient and scalable operation.
 
