@@ -1,8 +1,7 @@
 """
 This module provides functionality to interact with AWS DynamoDB. It includes
-capabilities to create a new DynamoDB table and initialize a key/value pair within it.
-Specifically, it creates a table named 'mailbox-state-key' and initializes a key 'open'
-with an unsigned integer value set to 0.
+capabilities to create a new DynamoDB table named 'mailbox-state' and initializes
+a key 'closed' with a string value.
 
 Requirements:
 - AWS SDK for Python (Boto3)
@@ -18,16 +17,11 @@ from botocore.exceptions import ClientError
 
 def create_dynamodb_table(table_name):
     """
-    Creates a DynamoDB table with the specified table name.
-
-    The table is created with a single primary key attribute 'id' of type String.
-    It sets the provisioned read and write capacity units to 1.
+    Creates a DynamoDB table with the specified table name, using 'mailbox_status_value'
+    as the primary key and 'mailbox_status_timestamp' as the sort key.
 
     Args:
         table_name (str): The name of the table to create.
-
-    Prints the status of table creation or an error message if the table already exists
-    or if there is an exception during table creation.
     """
     dynamodb = boto3.client('dynamodb')
 
@@ -36,14 +30,22 @@ def create_dynamodb_table(table_name):
             TableName=table_name,
             KeySchema=[
                 {
-                    'AttributeName': 'id',
-                    'KeyType': 'HASH'
+                    'AttributeName': 'mailbox_status_value',
+                    'KeyType': 'HASH'  # Primary key
+                },
+                {
+                    'AttributeName': 'mailbox_status_timestamp',
+                    'KeyType': 'RANGE'  # Sort key
                 }
             ],
             AttributeDefinitions=[
                 {
-                    'AttributeName': 'id',
-                    'AttributeType': 'S'
+                    'AttributeName': 'mailbox_status_value',
+                    'AttributeType': 'S'  # String
+                },
+                {
+                    'AttributeName': 'mailbox_status_timestamp',
+                    'AttributeType': 'S'  # String
                 }
             ],
             ProvisionedThroughput={
@@ -59,17 +61,14 @@ def create_dynamodb_table(table_name):
             print(f"Error creating table: {e}")
 
 
-def create_initial_key_value(table_name, key_name, initial_value):
+def create_initial_key_value(table_name, initial_value):
     """
-    Creates an initial key/value pair in the specified DynamoDB table.
+    Creates an initial item in the specified DynamoDB table with 'mailbox_status_value'
+    as the key and 'mailbox_status_timestamp' for the record timestamp.
 
     Args:
         table_name (str): The name of the DynamoDB table to update.
-        key_name (str): The key of the item to create.
-        initial_value (int): The initial value to set for the key.
-
-    Adds a new item with the specified key and value to the table.
-    Prints a message indicating the action taken or an error if it occurs.
+        initial_value (str): The initial value for 'mailbox_status_value', defaults to 'closed'.
     """
     dynamodb = boto3.resource('dynamodb')
     table = dynamodb.Table(table_name)
@@ -81,15 +80,13 @@ def create_initial_key_value(table_name, key_name, initial_value):
     try:
         response = table.put_item(
             Item={
-                'id': key_name,
-                'value': initial_value,
-                'timestamp': central_time.strftime('%Y%m%d%H%M%S')  # Formatting the timestamp
+                'mailbox_status_value': initial_value,
+                'mailbox_status_timestamp': central_time.strftime('%Y-%m-%dT%H:%M:%S')  # ISO 8601 format
             }
         )
-        print(f"Key '{key_name}' created with initial value {initial_value} and timestamp {central_time}")
+        print(f"Initial item created with value '{initial_value}' and timestamp {central_time.isoformat()}")
     except ClientError as e:
         print(f"Error putting item: {e}")
-
 
 def wait_for_table_creation(table_name):
     """
@@ -105,17 +102,14 @@ def wait_for_table_creation(table_name):
     except ClientError as e:
         print(f"Error waiting for table creation: {e}")
 
-
 def main():
     """
     Main function to execute table creation and item insertion.
 
-    It defines the table name and key/value pair details, then calls functions
-    to create the DynamoDB table and insert the initial key/value pair.
+    It defines the table name and initializes an item with a value and timestamp.
     """
     table_name = 'mailbox-state'
-    key_name = 'open'
-    initial_value = 0
+    initial_value = 'closed'  # Initial value is now a string representing the status
 
     print("Creating DynamoDB table")
     create_dynamodb_table(table_name)
@@ -124,10 +118,9 @@ def main():
     print("Waiting for table to become active...")
     wait_for_table_creation(table_name)
 
-    print("Creating initial key/value")
-    create_initial_key_value(table_name, key_name, initial_value)
+    print("Creating initial item")
+    create_initial_key_value(table_name, initial_value)
     print("Done")
-
 
 if __name__ == '__main__':
     main()
