@@ -113,7 +113,7 @@ def main():
     It defines the table name and key/value pair details, then calls functions
     to create the DynamoDB table and insert the initial key/value pair.
     """
-    table_name = 'mailbox-state'
+    table_name = 'patio-gate-state'
     key_name = 'open'
     initial_value = 0
 
