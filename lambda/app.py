@@ -8,70 +8,30 @@ notifications. The function expects to be triggered by AWS API Gateway with path
 corresponding to mailbox events.
 """
 
-import json
 import os
 
 from mailbox_state_machine import MailboxStateMachine
 
-
-def http_message(code, msg):
-    """
-    Constructs a formatted HTTP response message.
-
-    Args:
-        code (int): HTTP status code.
-        msg (str): Response message body.
-
-    Returns:
-        dict: A dictionary representing the HTTP response.
-    """
-    return {
-        'statusCode': code,
-        'headers': {
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Headers': '*',
-            'Access-Control-Allow-Methods': 'POST, OPTIONS'
-        },
-        'body': json.dumps(msg)
-    }
-
+ERROR_MSG_DOOR_KEY_MISSING = 'MBS001 - Ignoring event as "door" key is missing.'
+ERROR_MSG_ENV_VARS_MISSING = "MBS002 - SNS_ARN and DYNAMODB_TABLE environment variables are required."
 
 def handler(event, context):
-    """
-    Handles incoming HTTP requests to manage mailbox state.
+    print(f"event:\r{event}")
 
-    This function is triggered by an HTTP request through AWS API Gateway. It extracts
-    the mailbox state (open/closed) from the request path, updates the mailbox state using
-    the MailboxStateMachine class, and returns an HTTP response.
+    if 'door' not in event:
+        raise Exception(ERROR_MSG_DOOR_KEY_MISSING)
 
-    Args:
-        event (dict): The event object containing request details.
-        context (LambdaContext): Provides runtime information about the Lambda function execution.
-
-    Returns:
-        dict: The HTTP response object.
-    """
-    print(f"event:\n{event}")
-    print(f"context:\n{context}")
-
-    if 'open' in event['path']:
-        mailbox_status = 'open'
-    elif 'closed' in event['path']:
-        mailbox_status = 'closed'
-    else:
-        print("Error: Invalid mailbox status.")
-        return http_message(400, 'Invalid mailbox status.')
+    # Process the event if water_level exists
+    mailbox_status = event['door']
 
     sns_arn = os.getenv('MAILBOX_SNS_ARN')
     dynamodb_name = os.getenv('MAILBOX_DYNAMODB_TABLE')
 
     if not sns_arn or not dynamodb_name:
-        print("Error: SNS_ARN and DYNAMODB_TABLE environment variables are required.")
-        return http_message(500, 'SNS_ARN and DYNAMODB_TABLE environment variables are required.')
+        raise Exception(ERROR_MSG_ENV_VARS_MISSING)
 
     mailbox = MailboxStateMachine(sns_arn, dynamodb_name)
 
     mailbox.handle_event(mailbox_status)
-    print(f"Event:'{mailbox_status}', State: {mailbox.state}, DB: {mailbox.get_db_value()}")
 
-    return http_message(200, 'Success')
+    print(f"Event:'{mailbox_status}', State: {mailbox.state}, DB: {mailbox.get_db_value()}")

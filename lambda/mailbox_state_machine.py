@@ -75,6 +75,8 @@ class MailboxStateMachine:
         Args:
             event (str): The event type, either 'open' or 'closed'.
         """
+        event = event.lower()
+
         if event == "open":
             self.increment_db_value()
             if self.state == "CLOSED":
@@ -170,6 +172,7 @@ class MailboxStateMachine:
         Args:
             message (str): The message to be sent.
         """
+        print(f"Sending SNS: {message}")
         try:
             self.sns_client.publish(
                 TopicArn=self.sns_arn,
