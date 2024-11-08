@@ -1,1 +1,0 @@
-Place these in the lambda function "Test" area of the Lambda console. 
